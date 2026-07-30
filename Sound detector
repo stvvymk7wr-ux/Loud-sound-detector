@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Fast Sound Trigger Test</title>
+  <style>
+    body { font-family: system-ui; text-align: center; padding: 2rem; background: #111; color: #fff; }
+    button { padding: 1rem 2rem; font-size: 1.2rem; border-radius: 8px; border: none; background: #007aff; color: white; cursor: pointer; }
+    #meter { width: 80%; max-width: 500px; height: 20px; background: #333; margin: 2rem auto; border-radius: 10px; overflow: hidden; }
+    #fill { width: 0%; height: 100%; background: #34c759; transition: width 0.05s ease; }
+  </style>
+</head>
+<body>
+  <h2>Rapid Noise Detector (Mac Test)</h2>
+  <button id="startBtn">Start Listening</button>
+  <div id="meter"><div id="fill"></div></div>
+  <p id="status">Status: Idle</p>
+
+  <script>
+    const THRESHOLD = 0.35;
+    const SHORTCUT_NAME = "TestShortcut";
+    const COOLDOWN_MS = 2000;
+
+    let lastTrigger = 0;
+
+    document.getElementById('startBtn').addEventListener('click', async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(analyser);
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        document.getElementById('status').innerText = "Status: Listening...";
+        document.getElementById('startBtn').style.display = "none";
+
+        function checkLevel() {
+          analyser.getByteFrequencyData(dataArray);
+          
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+          let average = (sum / dataArray.length) / 255;
+
+          document.getElementById('fill').style.width = Math.min(100, (average / THRESHOLD) * 100) + '%';
+
+          const now = Date.now();
+          if (average > THRESHOLD && (now - lastTrigger > COOLDOWN_MS)) {
+            lastTrigger = now;
+            document.getElementById('status').innerText = "TRIGGERED! Launching Shortcut...";
+            window.location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(SHORTCUT_NAME)}`;
+          }
+
+          requestAnimationFrame(checkLevel);
+        }
+
+        checkLevel();
+      } catch (err) {
+        alert("Microphone error: " + err);
+      }
+    });
+  </script>
+</body>
+</html>
